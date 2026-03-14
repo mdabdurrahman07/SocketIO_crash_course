@@ -8,6 +8,8 @@ import { connectDB, closeDB } from "./config/database.js";
 import { Server } from "socket.io";
 import http from "http";
 import orderRoutes from "./routes/orderRoutes.js";
+import { Socket } from "dgram";
+import { orderHandler } from "./socket/orderHandler.js";
 
 // Load environment variables
 dotenv.config();
@@ -22,7 +24,7 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  console.log("a user connected", socket.id);
+  orderHandler(io, socket);
 });
 
 // Middleware

@@ -4,9 +4,10 @@
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
-import { connectDB, getCollection, closeDB } from "./config/database.js";
+import { connectDB, closeDB } from "./config/database.js";
 import { Server } from "socket.io";
 import http from "http";
+import orderRoutes from "./routes/orderRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -42,55 +43,10 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Get all orders
-app.get("/api/orders", async (req, res) => {
-  try {
-    const ordersCollection = getCollection("orders");
-    const orders = await ordersCollection
-      .find({})
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .toArray();
-
-    res.json({
-      success: true,
-      count: orders.length,
-      orders,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-// Get single order by ID
-app.get("/api/orders/:orderId", async (req, res) => {
-  try {
-    const ordersCollection = getCollection("orders");
-    const order = await ordersCollection.findOne({
-      orderId: req.params.orderId,
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      order,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+// ==========================================
+// API ROUTES
+// ==========================================
+app.use("/api/orders", orderRoutes);
 
 // 404 handler
 app.use((req, res) => {

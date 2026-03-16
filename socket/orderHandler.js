@@ -85,6 +85,22 @@ export const orderHandler = (io, socket) => {
             },
           },
       );
-    } catch (error) {}
+      io.to(`order-${data.orderId}`).emit("orderCancelled", {
+        orderId: data.orderId,
+      });
+      io.to("admins").emit("orderCancelled", {
+        orderId: data.orderId,
+        customerName: order.customerName,
+      });
+      callBack({
+        success: true,
+      });
+    } catch (error) {
+      console.error("Cancel order error", error);
+      callBack({
+        success: false,
+        message: error.message,
+      });
+    }
   });
 };

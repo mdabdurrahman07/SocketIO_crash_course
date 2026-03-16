@@ -82,6 +82,7 @@ export function createOrderDocument(orderData, orderId, totals) {
   };
 }
 
+// validStatusTransaction
 export function isValidStatusTransition(currentStatus, newStatus) {
   const validTransitions = {
     pending: ["confirmed", "cancelled"],

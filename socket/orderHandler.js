@@ -55,4 +55,36 @@ export const orderHandler = (io, socket) => {
       });
     }
   });
+  // cancel order
+  socket.on("cancelOrder", async (data, callBack) => {
+    try {
+      const orderCollection = getCollection("orders");
+      const order = await orderCollection.findOne({
+        orderId: data.orderId,
+      });
+      if (!order) {
+        return callBack({ success: false, message: "order not fine" });
+      }
+      if (!["pending", "confirmed"].includes(order.status)) {
+        return callBack({
+          success: false,
+          message: "Can not cancel the order",
+        });
+      }
+      await orderCollection.updateOne(
+        { orderId: data.orderId } <
+          {
+            $set: { status: "cancelled", updatedAt: new Date() },
+            $push: {
+              statusHistory: {
+                status: "cancelled",
+                timestamp: new Date(),
+                by: socket.id,
+                note: data.reason || "",
+              },
+            },
+          },
+      );
+    } catch (error) {}
+  });
 };

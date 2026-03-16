@@ -3,6 +3,7 @@ import {
   calculateTotalPrice,
   createOrderDocument,
   generateOrderId,
+  isValidStatusTransition,
   validateOrder,
 } from "../utils/helper.js";
 
@@ -40,7 +41,7 @@ export const orderHandler = (io, socket) => {
         orderId: data.orderId,
       });
       if (!order) {
-        return callBack({ success: false, message: "order not fine" });
+        return callBack({ success: false, message: "order not found" });
       }
       socket.join(`order-${data.orderId}`);
       callBack({
@@ -166,6 +167,43 @@ export const orderHandler = (io, socket) => {
     } catch (error) {
       console.error(error);
       callBack({ success: false, message: "failed to load orders" });
+    }
+  });
+  // admin updateOrderStatus
+  socket.on("updateOrderStatus", async (data, callBack) => {
+    try {
+      const orderCollection = getCollection("orders");
+      const order = await orderCollection.findOne({
+        orderId: data.orderId,
+      });
+      if (!order) {
+        return callBack({ success: false, message: "order not found" });
+      }
+      if (!isValidStatusTransition(order.status, data.newStatus)) {
+        return callBack({
+          success: false,
+          message: "Invalid status transaction",
+        });
+      }
+      const result = await orderCollection.findOneAndUpdate(
+        { orderId: data.orderId },
+        {
+          $set: { status: data.newStatus, updatedAt: new Date() },
+          $push: {
+            statusHistory: {
+              status: data.newStatus,
+              timestamp: new Date(),
+              by: socket.id,
+              note: "Status updated by admin",
+            },
+          },
+        },
+      );
+    } catch (error) {
+      callBack({
+        success: false,
+        message: "failed to update order status",
+      });
     }
   });
 };

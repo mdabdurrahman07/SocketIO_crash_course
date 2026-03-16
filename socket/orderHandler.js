@@ -103,4 +103,26 @@ export const orderHandler = (io, socket) => {
       });
     }
   });
+  // get my orders
+  socket.on("getMyOrders", async (data, callBack) => {
+    try {
+      const orderCollection = getCollection("orders");
+      const orders = await orderCollection
+        .find({
+          customerPhone: data.customerPhone,
+        })
+        .sort({
+          createdAt: -1,
+        })
+        .limit(20)
+        .toArray();
+      callBack({ success: true, orders });
+    } catch (error) {
+      console.error("getMyOrders error", error);
+      callBack({
+        success: false,
+        message: error.message,
+      });
+    }
+  });
 };

@@ -198,7 +198,18 @@ export const orderHandler = (io, socket) => {
             },
           },
         },
+        { returnDocument: "after" },
       );
+      io.to(`order-${data.orderId}`).emit("statusUpdated", {
+        orderId: data.orderId,
+        status: data.newStatus,
+        order: result,
+      });
+      socket.to("admin").emit("orderStatusChanged", {
+        orderId: data.orderId,
+        newStatus: data.newStatus,
+      });
+      callBack({ success: true });
     } catch (error) {
       callBack({
         success: false,

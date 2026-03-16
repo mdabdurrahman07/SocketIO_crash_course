@@ -32,4 +32,27 @@ export const orderHandler = (io, socket) => {
       callBack({ success: false, message: "order failed" });
     }
   });
+  // track order
+  socket.on("trackOrder", async (data, callBack) => {
+    try {
+      const orderCollection = getCollection("orders");
+      const order = await orderCollection.findOne({
+        orderId: data.orderId,
+      });
+      if (!order) {
+        return callBack({ success: false, message: "order not fine" });
+      }
+      socket.join(`order-${data.orderId}`);
+      callBack({
+        success: true,
+        order,
+      });
+    } catch (error) {
+      console.error("order tracking error", error);
+      callBack({
+        success: false,
+        message: error.message,
+      });
+    }
+  });
 };

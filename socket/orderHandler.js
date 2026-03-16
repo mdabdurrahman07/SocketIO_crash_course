@@ -1,17 +1,35 @@
-import { validateOrder } from "../utils/helper.js";
+import { getCollection } from "../config/database.js";
+import {
+  calculateTotalPrice,
+  createOrderDocument,
+  generateOrderId,
+  validateOrder,
+} from "../utils/helper.js";
 
 export const orderHandler = (io, socket) => {
   console.log("socket is connected", socket.id);
   //   place oder
-  socket.on("placeOrder", (data, callBack) => {
+  socket.on("placeOrder", async (data, callBack) => {
     try {
       console.log(`placed order from ${socket.id}`);
       const validation = validateOrder(data);
       if (!validation.valid) {
         return callBack({ success: false, message: validation.message });
       }
+      const totals = calculateTotalPrice(data.items);
+      const orderId = generateOrderId();
+      const order = createOrderDocument(data, orderId, totals);
+      const orderCollection = getCollection("orders");
+
+      await orderCollection.insertOne(order);
+      socket.join(`order-${orderId}`);
+      socket.join("customers");
+      io.to("admins").emit("newOrder", { order });
+      callBack({ success: true, order });
+      console.log(`order created: ${orderId}`);
     } catch (error) {
       console.log("order placed related error", error);
+      callBack({ success: false, message: "order failed" });
     }
   });
 };

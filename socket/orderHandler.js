@@ -147,5 +147,25 @@ export const orderHandler = (io, socket) => {
   });
 
   // admin side get all orders
-  socket.on("getAllOrders")
+  socket.on("getAllOrders", async (data, callBack) => {
+    try {
+      if (!socket.isAdmin) {
+        return callBack({ success: false, message: "Unauthorized" });
+      }
+      const orderCollection = getCollection("orders");
+      const filter = data?.status ? { status: data.status } : {};
+      const orders = await orderCollection
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .toArray();
+      callBack({
+        success: true,
+        orders,
+      });
+    } catch (error) {
+      console.error(error);
+      callBack({ success: false, message: "failed to load orders" });
+    }
+  });
 };

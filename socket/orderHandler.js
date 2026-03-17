@@ -312,4 +312,44 @@ export const orderHandler = (io, socket) => {
       });
     }
   });
+  // getLiveStats
+  socket.on("getLiveStats", async (data, callBack) => {
+    try {
+      if (!socket.isAdmin) {
+        return callBack({ success: false, message: "Unauthorized" });
+      }
+      const orderCollection = getCollection("orders");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const stats = {
+        totalToday: await orderCollection.countDocuments({
+          createdAt: { $gte: today },
+        }),
+        pending: await orderCollection.countDocuments({ status: "pending" }),
+        confirmed: await orderCollection.countDocuments({
+          status: "confirmed",
+        }),
+        preparing: await orderCollection.countDocuments({
+          status: "preparing",
+        }),
+        ready: await orderCollection.countDocuments({ status: "ready" }),
+        outForDelivery: await orderCollection.countDocuments({
+          status: "outForDelivery",
+        }),
+        delivered: await orderCollection.countDocuments({
+          status: "delivered",
+        }),
+        cancelled: await orderCollection.countDocuments({
+          status: "cancelled",
+        }),
+      };
+      callBack({ success: true, stats });
+    } catch (error) {
+      console.error(error.message);
+      callBack({
+        success: false,
+        message: "failed to get live stats order",
+      });
+    }
+  });
 };

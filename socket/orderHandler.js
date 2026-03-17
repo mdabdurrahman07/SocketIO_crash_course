@@ -217,4 +217,52 @@ export const orderHandler = (io, socket) => {
       });
     }
   });
+  // acceptOrder
+  socket.on("acceptOrder", async (data, callBack) => {
+    try {
+      if (!socket.isAdmin) {
+        return callBack({ success: false, message: "Unauthorized" });
+      }
+      const orderCollection = getCollection("orders");
+      const order = await orderCollection.findOne({ orderId: data.orderId });
+      if (!order || order.status !== "pending") {
+        return callBack({
+          success: false,
+          message: "Can not accept this order",
+        });
+      }
+      const estimatedTime = data.estimatedTime || 30;
+      const result = await orderCollection.findOneAndUpdate(
+        { orderId: data.orderId },
+        {
+          $set: { status: "confirmed", estimatedTime, updatedAt: new Date() },
+          $push: {
+            statusHistory: {
+              status: "confirmed",
+              timestamp: new Date(),
+              by: socket.id,
+              note: `Accepted with ${estimatedTime} min estimated time`,
+            },
+          },
+        },
+        {
+          returnDocument: "after",
+        },
+      );
+      io.to(`order-${data.orderId}`).emit("orderAccepted", {
+        orderId: data.orderId,
+        estimatedTime,
+      });
+      socket
+        .to("admins")
+        .emit("orderAcceptedByAdmin", { orderId: data.orderId });
+      callBack({ success: true, order: result });
+    } catch (error) {
+      console.error(error.message);
+      callBack({
+        success: false,
+        message: "failed to accept order",
+      });
+    }
+  });
 };

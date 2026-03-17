@@ -3,6 +3,7 @@ import {
   calculateTotalPrice,
   createOrderDocument,
   generateOrderId,
+  isValidStatusTransition,
   validateOrder,
 } from "../utils/helper.js";
 
@@ -40,7 +41,7 @@ export const orderHandler = (io, socket) => {
         orderId: data.orderId,
       });
       if (!order) {
-        return callBack({ success: false, message: "order not fine" });
+        return callBack({ success: false, message: "order not found" });
       }
       socket.join(`order-${data.orderId}`);
       callBack({
@@ -166,6 +167,189 @@ export const orderHandler = (io, socket) => {
     } catch (error) {
       console.error(error);
       callBack({ success: false, message: "failed to load orders" });
+    }
+  });
+  // admin updateOrderStatus
+  socket.on("updateOrderStatus", async (data, callBack) => {
+    try {
+      const orderCollection = getCollection("orders");
+      const order = await orderCollection.findOne({
+        orderId: data.orderId,
+      });
+      if (!order) {
+        return callBack({ success: false, message: "order not found" });
+      }
+      if (!isValidStatusTransition(order.status, data.newStatus)) {
+        return callBack({
+          success: false,
+          message: "Invalid status transaction",
+        });
+      }
+      const result = await orderCollection.findOneAndUpdate(
+        { orderId: data.orderId },
+        {
+          $set: { status: data.newStatus, updatedAt: new Date() },
+          $push: {
+            statusHistory: {
+              status: data.newStatus,
+              timestamp: new Date(),
+              by: socket.id,
+              note: "Status updated by admin",
+            },
+          },
+        },
+        { returnDocument: "after" },
+      );
+      io.to(`order-${data.orderId}`).emit("statusUpdated", {
+        orderId: data.orderId,
+        status: data.newStatus,
+        order: result,
+      });
+      socket.to("admin").emit("orderStatusChanged", {
+        orderId: data.orderId,
+        newStatus: data.newStatus,
+      });
+      callBack({ success: true });
+    } catch (error) {
+      callBack({
+        success: false,
+        message: "failed to update order status",
+      });
+    }
+  });
+  // acceptOrder
+  socket.on("acceptOrder", async (data, callBack) => {
+    try {
+      if (!socket.isAdmin) {
+        return callBack({ success: false, message: "Unauthorized" });
+      }
+      const orderCollection = getCollection("orders");
+      const order = await orderCollection.findOne({ orderId: data.orderId });
+      if (!order || order.status !== "pending") {
+        return callBack({
+          success: false,
+          message: "Can not accept this order",
+        });
+      }
+      const estimatedTime = data.estimatedTime || 30;
+      const result = await orderCollection.findOneAndUpdate(
+        { orderId: data.orderId },
+        {
+          $set: { status: "confirmed", estimatedTime, updatedAt: new Date() },
+          $push: {
+            statusHistory: {
+              status: "confirmed",
+              timestamp: new Date(),
+              by: socket.id,
+              note: `Accepted with ${estimatedTime} min estimated time`,
+            },
+          },
+        },
+        {
+          returnDocument: "after",
+        },
+      );
+      io.to(`order-${data.orderId}`).emit("orderAccepted", {
+        orderId: data.orderId,
+        estimatedTime,
+      });
+      socket
+        .to("admins")
+        .emit("orderAcceptedByAdmin", { orderId: data.orderId });
+      callBack({ success: true, order: result });
+    } catch (error) {
+      console.error(error.message);
+      callBack({
+        success: false,
+        message: "failed to accept order",
+      });
+    }
+  });
+  // rejectOrder
+  socket.on("rejectOrder", async (data, callBack) => {
+    try {
+      if (!socket.isAdmin) {
+        return callBack({ success: false, message: "Unauthorized" });
+      }
+      const orderCollection = getCollection("orders");
+      const order = await orderCollection.findOne({ orderId: data.orderId });
+      if (!order || order.status !== "pending") {
+        return callBack({
+          success: false,
+          message: "Can not reject this order",
+        });
+      }
+      const result = await orderCollection.findOneAndUpdate(
+        { orderId: data.orderId },
+        {
+          $set: { status: "cancelled", updatedAt: new Date() },
+          $push: {
+            statusHistory: {
+              status: "cancelled",
+              timestamp: new Date(),
+              by: socket.id,
+              note: `Rejected`,
+            },
+          },
+        },
+        {
+          returnDocument: "after",
+        },
+      );
+      io.to(`order-${data.orderId}`).emit("orderRejected", {
+        orderId: data.orderId,
+        reason: data.reason,
+      });
+      socket
+        .to("admins")
+        .emit("orderRejectedByAdmin", { orderId: data.orderId });
+      callBack({ success: true });
+    } catch (error) {
+      console.error(error.message);
+      callBack({
+        success: false,
+        message: "failed to reject order",
+      });
+    }
+  });
+  // getLiveStats
+  socket.on("getLiveStats", async (data, callBack) => {
+    try {
+      if (!socket.isAdmin) {
+        return callBack({ success: false, message: "Unauthorized" });
+      }
+      const orderCollection = getCollection("orders");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const stats = {
+        totalToday: await orderCollection.countDocuments({
+          createdAt: { $gte: today },
+        }),
+        pending: await orderCollection.countDocuments({ status: "pending" }),
+        confirmed: await orderCollection.countDocuments({
+          status: "confirmed",
+        }),
+        preparing: await orderCollection.countDocuments({
+          status: "preparing",
+        }),
+        ready: await orderCollection.countDocuments({ status: "ready" }),
+        outForDelivery: await orderCollection.countDocuments({
+          status: "outForDelivery",
+        }),
+        delivered: await orderCollection.countDocuments({
+          status: "delivered",
+        }),
+        cancelled: await orderCollection.countDocuments({
+          status: "cancelled",
+        }),
+      };
+      callBack({ success: true, stats });
+    } catch (error) {
+      console.error(error.message);
+      callBack({
+        success: false,
+        message: "failed to get live stats order",
+      });
     }
   });
 };
